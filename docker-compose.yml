@@ -1,0 +1,97 @@
+version: '3.8'
+
+services:
+  # MongoDB Database
+  mongodb:
+    image: mongo:7.0
+    container_name: weathershield-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-weathershield123}
+      MONGO_INITDB_DATABASE: weathershield
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - ./backend/scripts/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    networks:
+      - weathershield-network
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: weathershield-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      MONGODB_URI: mongodb://admin:${MONGO_ROOT_PASSWORD:-weathershield123}@mongodb:27017/weathershield?authSource=admin
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-here}
+      JWT_EXPIRES_IN: 7d
+      CELO_RPC_URL: ${CELO_RPC_URL:-https://alfajores-forno.celo-testnet.org}
+      CELO_CHAIN_ID: 44787
+      FARMER_REGISTRY_ADDRESS: ${FARMER_REGISTRY_ADDRESS:-0x805dE0a2FC7e4818D19366f7191B162cB84dE89a}
+      PREMIUM_POOL_ADDRESS: ${PREMIUM_POOL_ADDRESS:-0xbfA80344cD3f706C80EF9924560E87E422507867}
+      PAYOUT_MANAGER_ADDRESS: ${PAYOUT_MANAGER_ADDRESS:-0x43A839630a3dB74dE461628bb5A665A22D4f8b90}
+      CUSD_ADDRESS: ${CUSD_ADDRESS:-0x874069Fa1Eb16D44d622F2e0Ca25eeA172369bC1}
+      REDSTONE_API_KEY: ${REDSTONE_API_KEY}
+      REDSTONE_BASE_URL: ${REDSTONE_BASE_URL:-https://api.redstone.finance}
+      OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+    ports:
+      - "5000:5000"
+    depends_on:
+      - mongodb
+    networks:
+      - weathershield-network
+    volumes:
+      - ./backend/logs:/app/logs
+
+  # Frontend
+  frontend:
+    build:
+      context: ./shield-weather-yield
+      dockerfile: Dockerfile
+    container_name: weathershield-frontend
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:5000}
+      VITE_CELO_RPC_URL: ${VITE_CELO_RPC_URL:-https://alfajores-forno.celo-testnet.org}
+      VITE_FARMER_REGISTRY_ADDRESS: ${VITE_FARMER_REGISTRY_ADDRESS:-0x805dE0a2FC7e4818D19366f7191B162cB84dE89a}
+      VITE_PREMIUM_POOL_ADDRESS: ${VITE_PREMIUM_POOL_ADDRESS:-0xbfA80344cD3f706C80EF9924560E87E422507867}
+      VITE_PAYOUT_MANAGER_ADDRESS: ${VITE_PAYOUT_MANAGER_ADDRESS:-0x43A839630a3dB74dE461628bb5A665A22D4f8b90}
+      VITE_CUSD_ADDRESS: ${VITE_CUSD_ADDRESS:-0x874069Fa1Eb16D44d622F2e0Ca25eeA172369bC1}
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - weathershield-network
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: weathershield-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - weathershield-network
+
+volumes:
+  mongodb_data:
+    driver: local
+
+networks:
+  weathershield-network:
+    driver: bridge
