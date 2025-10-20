@@ -1,0 +1,21 @@
+# Global
+.DS_Store
+.env
+.env.*
+
+# Node
+node_modules/
+**/node_modules/
+*.log
+
+# Vite/React
+**/dist/
+**/.vite/
+
+# Hardhat
+**/artifacts/
+**/cache/
+
+# Misc
+*.local
+*.tmp
